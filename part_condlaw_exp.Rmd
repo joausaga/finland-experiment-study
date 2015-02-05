@@ -1,0 +1,341 @@
+---
+title: "Participation in the Crowdsourced Reform of Finland's Condominium-Law"
+author: "Jorge Saldivar"
+date: "4 Feb 2015"
+output: html_document
+---
+
+```{r echo=FALSE}
+#Loading libraries
+library(ggplot2)
+library(xtable)
+library(gridExtra)
+#Set workspace
+setwd(getwd())
+#Reading data
+users_camp_other = read.csv("./data/users_camp_other.csv",header=TRUE,sep=";",stringsAsFactors=FALSE)
+users_camp_vies = read.csv("./data/users_camp_vies.csv",header=TRUE,sep=";",stringsAsFactors=FALSE)
+users_camp_hall = read.csv("./data/users_camp_hall.csv",header=TRUE,sep=";",stringsAsFactors=FALSE)
+users_camp_erim = read.csv("./data/users_camp_erim.csv",header=TRUE,sep=";",stringsAsFactors=FALSE)
+```
+
+Study on the dynamics of participation detected in the Finland idea crowdsourcing condominium law-reform process conducted in the idea management system [IdeaScale](http://www.ideascale.com). During the process, ideas were collected under three meta-topics or campaigns: governance, communication and conflicts in the homeowners’ association.
+
+### Data Snippet
+```{r echo=FALSE, results='asis'}
+print(xtable(head(users_camp_other[50:55,c("id","ideas","votes","comments")]),
+             align=c('c','c','c','c','c')), type="html", comment=F, include.rownames=FALSE)
+```
+
+### Participation
+```{r echo=FALSE}
+#Get a table of those participating outside the pre-defined campaigns
+part_camp_other = users_camp_other[users_camp_other$ideas!=0|users_camp_other$votes!=0|users_camp_other$comments!=0,]
+#Get a table of those participating in communication campaign (vies)
+part_camp_vies = users_camp_vies[users_camp_vies$ideas!=0|users_camp_vies$votes!=0|users_camp_vies$comments!=0,]
+#Get a table of those participating in governance campaign (hall)
+part_camp_hall = users_camp_hall[users_camp_hall$ideas!=0|users_camp_hall$votes!=0|users_camp_hall$comments!=0,]
+#Get a table of those participating in conflict campaign (erim)
+part_camp_erim = users_camp_erim[users_camp_erim$ideas!=0|users_camp_erim$votes!=0|users_camp_erim$comments!=0,]
+
+#Calculate set of contributors
+contributors = part_camp_vies
+#for (id in unique(part_camp_vies$id)) {
+#  pos = match(id,contributors,-1)
+#  if (pos == 1) {
+#    contributors = append(contributors,id)
+#  }
+#}
+for (id in unique(part_camp_hall$id)) {
+  pos = match(id,contributors$id,-1)
+  if (pos == -1) {
+    contributors = rbind(contributors,part_camp_hall[part_camp_hall$id==id,])
+  } else {
+    contributors[pos,"ideas"] = contributors[pos,"ideas"] + part_camp_hall[part_camp_hall$id==id,"ideas"]
+    contributors[pos,"votes"] = contributors[pos,"votes"] + part_camp_hall[part_camp_hall$id==id,"votes"]
+    contributors[pos,"comments"] = contributors[pos,"comments"] + part_camp_hall[part_camp_hall$id==id,"comments"]
+  }
+}
+for (id in unique(part_camp_erim$id)) {
+  pos = match(id,contributors$id,-1)
+  if (pos == -1) {
+    contributors = rbind(contributors,part_camp_erim[part_camp_erim$id==id,])
+  } else {
+    contributors[pos,"ideas"] = contributors[pos,"ideas"] + part_camp_erim[part_camp_erim$id==id,"ideas"]
+    contributors[pos,"votes"] = contributors[pos,"votes"] + part_camp_erim[part_camp_erim$id==id,"votes"]
+    contributors[pos,"comments"] = contributors[pos,"comments"] + part_camp_erim[part_camp_erim$id==id,"comments"] 
+  }
+}
+full_contrib = c()  # placed ideas, comments and votes
+idea_vote = c() # placed ideas, votes but not comments
+idea_comm = c() # placed ideas,comments but not votes
+comm_vote = c() # placed comments and votes but not ideas
+ideators = c() # placed only ideas
+voters = c() # placed only votes
+commenters = c() # placed only comments
+for (id in contributors$id) {
+  vies_ideas = part_camp_vies[part_camp_vies$id==id,"ideas"]
+  vies_comments = part_camp_vies[part_camp_vies$id==id,"comments"]
+  vies_votes = part_camp_vies[part_camp_vies$id==id,"votes"]
+  hall_ideas = part_camp_hall[part_camp_hall$id==id,"ideas"]
+  hall_comments = part_camp_hall[part_camp_hall$id==id,"comments"]
+  hall_votes = part_camp_hall[part_camp_hall$id==id,"votes"]
+  erim_ideas = part_camp_erim[part_camp_erim$id==id,"ideas"]
+  erim_comments = part_camp_erim[part_camp_erim$id==id,"comments"]
+  erim_votes = part_camp_erim[part_camp_erim$id==id,"votes"]
+  ideator = FALSE
+  commenter = FALSE
+  voter = FALSE
+  
+  if (length(vies_ideas)>0&&vies_ideas>0||
+      length(hall_ideas)>0&&hall_ideas>0||
+      length(erim_ideas)>0&&erim_ideas>0) {
+    ideator = TRUE  
+  }
+  
+  if (length(vies_comments)>0&&vies_comments>0||
+      length(hall_comments)>0&&hall_comments>0||
+      length(erim_comments)>0&&erim_comments>0) {
+    commenter = TRUE  
+  }
+  if (length(vies_votes)>0&&vies_votes>0||
+      length(hall_votes)>0&&hall_votes>0||
+      length(erim_votes)>0&&erim_votes>0) {
+    voter = TRUE  
+  }
+  if (ideator&commenter&voter) {
+    full_contrib = append(full_contrib,id)
+    next
+  } 
+  if (ideator&voter&!commenter) {
+    idea_vote = append(idea_vote,id)
+    next
+  }
+  if (ideator&commenter&!voter) {
+    idea_comm = append(idea_comm,id)
+    next
+  }
+  if (!ideator&commenter&voter) {
+    comm_vote = append(comm_vote,id)
+    next
+  }
+  if (!ideator&!commenter&voter) {
+    weak_contrib = append(weak_contrib,id)
+    next
+  }
+  if (ideator) {
+    ideators = append(ideators,id)
+    next
+  }
+  if (commenter) {
+    commenters = append(commenters,id) 
+    next
+  }
+  if (voter) {
+    voters = append(voters,id)
+    next
+  } 
+  print(paste("Cannot find the category of the participant: ",id,sep="")) 
+}
+num_contributors = nrow(contributors)
+total_users = nrow(users_camp_other)
+observers = total_users-num_contributors
+num_full_contrib = length(full_contrib)
+num_med_contrib = total_users - (observers + num_full_contrib)
+num_ideator_voters = length(idea_vote)
+num_commenters = length(commenters)
+num_all_camp_part = length(Reduce(intersect,  list(part_camp_vies$id, part_camp_hall$id, part_camp_erim$id)))
+num_vies_hall = length(intersect(part_camp_vies$id, part_camp_hall$id))
+num_vies_erim = length(intersect(part_camp_vies$id, part_camp_erim$id))
+num_hall_erim = length(intersect(part_camp_hall$id, part_camp_erim$id))
+```
+
+From the **`r total_users`** users registered as participants, **`r num_contributors` (`r paste(round(num_contributors*100/total_users,1),"%",sep="")`)** have actually contributed to at least one of the campaigns in some way, i.e., submitting ideas, placing comments and/or voting, while **`r observers` (`r paste(round(observers*100/total_users,1),"%",sep="")`)** only observed the activity. 
+
+Most of the content was generated by **`r num_full_contrib`** participants **(`r paste(round(num_full_contrib*100/total_users,1),"%"," of the ",total_users,sep="")`)**, who have actively taken part in the process by posting ideas, and placing comments and voting, i.e., generated the three type of content. The remaining **`r num_med_contrib` (`r paste(round(num_med_contrib*100/total_users,1),"%",sep="")`)** participants contributed with some additional ideas, comments, and votes.
+
+Out of the **`r num_contributors`** contributors, **`r num_full_contrib` (`r paste(round(num_full_contrib*100/num_contributors,1),"%",sep="")`)** have generated the three type of content (ideas, votes, and comments),  **`r num_ideator_voters` (`r paste(round(num_ideator_voters*100/num_contributors,1),"%",sep="")`)** have submitted ideas and posted votes but not comments, and **`r num_commenters` (`r paste(round(num_commenters*100/num_contributors,1),"%",sep="")`)** have contributed by only commenting on the existing ideas.
+
+Only **`r num_all_camp_part`** participants have contributed with ideas, comments and votes on each of three campaings, **`r num_vies_hall`** have participated only in the communication and governance campaigns, **`r num_vies_erim`** have produced content for the communication and conflicts in the homeowners’ association campaigns, and **`r num_hall_erim`** have taken part just campaigns related with governance and conflicts between homeowners. The most "attractive" campaign was the related with the governance laws with **`r nrow(part_camp_hall)`** participants; between the other two, the campaign related with conflicts between homeowners had **`r nrow(part_camp_erim)`** contributors while the one in charge of collecting ideas regarding communication attracted **`r nrow(part_camp_vies)`** participants.
+
+```{r echo=FALSE}
+tot_ideators = Reduce(union,list(part_camp_vies[part_camp_vies$ideas>0,"id"], part_camp_hall[part_camp_hall$ideas>0,"id"], part_camp_erim[part_camp_erim$ideas>0,"id"]))
+tot_voters = Reduce(union,list(part_camp_vies[part_camp_vies$votes>0,"id"], part_camp_hall[part_camp_hall$votes>0,"id"], part_camp_erim[part_camp_erim$votes>0,"id"]))
+tot_commenters = Reduce(union,list(part_camp_vies[part_camp_vies$comments>0,"id"], part_camp_hall[part_camp_hall$comments>0,"id"], part_camp_erim[part_camp_erim$comments>0,"id"]))
+
+part_camp_vies$campaign = "Communication"
+part_camp_hall$campaign = "Governance"
+part_camp_erim$campaign = "Conflict"
+total_campaigns = rbind(part_camp_vies,part_camp_hall)
+total_campaigns = rbind(total_campaigns,part_camp_erim)
+```
+
+### Distribution of Idea Production
+How the production of ideas was distributed throughout participants. 
+
+*Obs. Users that didn't produce any idea as well as those outliers were removed before plotting.*
+
+#### In Total
+
+```{r ideas_dist, echo=FALSE, fig.width=6, fig.height=6}
+ideators = contributors[contributors$ideas>0&contributors$ideas<=10,] # Get rid of contributors that didn't produce ideas
+ggplot(ideators, aes(x=ideas)) + 
+  geom_histogram(binwidth=1, colour="black", fill="white") +
+  #geom_vline(xintercept = mean_producers, linetype = 'dashed', color = 'red', size = 1) +
+  scale_x_continuous(breaks=c(1:25)) +
+  scale_y_continuous(breaks=c(0,5,10,15,20,25,30,35,40,45,50)) +
+  labs(x="Ideas Count", y="Participants Count") +
+  theme(axis.text=element_text(size=28), axis.title=element_text(size=28))
+```
+
+#### Per Campaign
+
+```{r echo=FALSE}
+aux_total_campaign = total_campaigns[total_campaigns$ideas>0,]
+idea_dis_camp = ggplot(aux_total_campaign, aes(x=ideas)) + 
+                geom_histogram(binwidth=1, colour="black", fill="white") +
+                scale_y_continuous(breaks=c(0,5,10,15,20,25,30,35)) +
+                labs(x="Number of Ideas Posted", y="Participant Count")
+idea_dis_camp + facet_grid(. ~ campaign)
+```
+
+#### General Statistics
+
+```{r ideas_tot, echo=FALSE}
+tot_ideas = sum(contributors$ideas)
+total_ideators = nrow(contributors[contributors$ideas>0,])
+per_ideators = paste(round(total_ideators / total_users * 100,2),"%",sep="")
+cat("Total Ideas: ",tot_ideas,"\nTotal Ideators: ",total_ideators," (",per_ideators," of the participants )")
+```
+
+*Five-number summary*
+```{r ideas_sum, echo=FALSE}
+summary(contributors$ideas)
+```
+
+### Distribution of Comment Production
+How the production of comments was distributed throughout participants.
+
+*Obs. Users that didn't post any comment as well as those outliers were removed before plotting.*
+
+#### In General
+
+```{r comments_dist, echo=FALSE, fig.width=6, fig.height=6}
+commenters = contributors[contributors$comments>0&contributors$comments<=50,] # Get rid of contributors that didn't produce ideas
+ggplot(commenters, aes(x=comments)) + 
+  geom_histogram(binwidth=1, colour="black", fill="white") +
+  #geom_vline(xintercept = mean_producers, linetype = 'dashed', color = 'red', size = 1) +
+  #scale_x_continuous(breaks=c(0:25)) +
+  #scale_y_continuous(breaks=c(0,5,10,15,20,25,30,35,40,45,50)) +
+  labs(x="Comments Count", y="Participants Count") +
+  theme(axis.text=element_text(size=28), axis.title=element_text(size=28))
+```
+
+#### Per Campaign
+
+```{r echo=FALSE}
+aux_total_campaign = total_campaigns[total_campaigns$comments>0,]
+comment_dis_camp = ggplot(aux_total_campaign, aes(x=comments)) + 
+                   geom_histogram(binwidth=1, colour="black", fill="white") +
+                   #scale_y_continuous(breaks=c(0,5,10,15,20,25,30,35)) +
+                   labs(x="Number of Comments Posted", y="Participant Count")
+comment_dis_camp + facet_grid(. ~ campaign)
+```
+
+#### General Statistics
+
+```{r comments_tot, echo=FALSE}
+tot_comments = sum(contributors$comments)
+total_commenters = nrow(contributors[contributors$comments>0,])
+per_commenters = paste(round(total_commenters / total_users * 100,2),"%",sep="")
+cat("Total Comments: ",tot_comments,"\nTotal Commenters: ",total_commenters," (",per_commenters," of the participants )")
+```
+
+*Five-number summary*
+```{r comments_sum, echo=FALSE}
+summary(contributors$comments)
+```
+
+### Distribution of Votes
+How the generation of votes was distributed throughout participants. 
+
+*Obs. Users that didn't vote as well as those outliers were removed before plotting.*
+
+#### In General
+
+```{r votes_dist, echo=FALSE, fig.width=6, fig.height=6}
+voters = contributors[contributors$votes>0&contributors$votes<=100,] # Get rid of contributors that didn't produce ideas
+ggplot(voters, aes(x=votes)) + 
+  geom_histogram(binwidth=1,colour="black", fill="white") +
+  #geom_vline(xintercept = mean_producers, linetype = 'dashed', color = 'red', size = 1) +
+  scale_x_continuous(breaks=c(0,10,20,30,40,50,60,70,80,90,100)) +
+  scale_y_continuous(breaks=c(0:10)) +
+  labs(x="Votes Count", y="Participants Count") +
+  theme(axis.text=element_text(size=28), axis.title=element_text(size=28))
+```
+
+#### Per Campaign
+
+```{r echo=FALSE}
+aux_total_campaign = total_campaigns[total_campaigns$votes>0,]
+votes_dis_camp = ggplot(aux_total_campaign, aes(x=votes)) + 
+                 geom_histogram(binwidth=1,colour="black", fill="white") +
+                 scale_y_continuous(breaks=c(0:10)) +
+                 labs(x="Number of Votes Posted", y="Participant Count")
+votes_dis_camp + facet_grid(. ~ campaign)
+```
+
+#### General Statistics
+
+```{r votes_tot, echo=FALSE}
+tot_votes = sum(contributors$votes)
+total_voters = nrow(contributors[contributors$votes>0,])
+per_voters = paste(round(total_voters / total_users * 100,2),"%",sep="")
+cat("Total Votes: ",tot_votes,"\nTotal Voters: ",total_voters," (",per_voters," of the participants )")
+```
+
+*Five-number summary*
+```{r votes_sum, echo=FALSE}
+summary(contributors$votes)
+```
+```{r echo=FALSE}
+grid.arrange(ideas_dist,comments_dist,ncol=2)
+```
+
+#### Statistics per Campaign
+```{r echo=FALSE, results='asis'}
+num_part_vies = nrow(part_camp_vies)
+num_part_hall = nrow(part_camp_hall)
+num_part_erim = nrow(part_camp_erim)
+sum_ideas_vies = sum(part_camp_vies$ideas)
+sum_ideas_hall = sum(part_camp_hall$ideas)
+sum_ideas_erim = sum(part_camp_erim$ideas)
+sum_comments_vies = sum(part_camp_vies$comments)
+sum_comments_hall = sum(part_camp_hall$comments)
+sum_comments_erim = sum(part_camp_erim$comments)
+sum_votes_vies = sum(part_camp_vies$votes)
+sum_votes_hall = sum(part_camp_hall$votes)
+sum_votes_erim = sum(part_camp_erim$votes)
+df = data.frame(campaign=c("Communication","Governance","Conflict"),
+                participants=c(num_part_vies,num_part_hall,num_part_erim),
+                ideas=c(sum_ideas_vies,sum_ideas_hall,sum_ideas_erim),
+                comments=c(sum_comments_vies,sum_comments_hall,sum_comments_erim),
+                votes=c(sum_votes_vies,sum_votes_hall,sum_votes_erim))
+print(xtable(df, align=c('c','c','c','c','c','c')), type="html", comment=F, include.rownames=FALSE)
+```
+
+#### Productivity per Campaign
+```{r echo=FALSE, results='asis'}
+df_productivity = data.frame(campaign=c("Communication","Governance","Conflict"),
+                ideas_per_participants=c(round(sum_ideas_vies/num_part_vies,1),
+                                         round(sum_ideas_hall/num_part_hall,1),
+                                         round(sum_ideas_erim/num_part_erim,1)),
+                comments_per_participants=c(round(sum_comments_vies/num_part_vies,1),
+                                            round(sum_comments_hall/num_part_hall,1),
+                                            round(sum_comments_erim/num_part_erim,1)),
+                votes_per_participants=c(round(sum_votes_vies/num_part_vies,1),
+                                            round(sum_votes_hall/num_part_hall,1),
+                                            round(sum_votes_erim/num_part_erim,1)))
+print(xtable(df_productivity, align=c('c','c','c','c','c')), type="html", 
+      comment=F, include.rownames=FALSE)
+```
