@@ -148,7 +148,7 @@ diff_o3_o3 = t.test(subset_q1_s1$option3,subset_q9_s2$option3)
 
 <!-- **Obs.** Dashed line showing the average of means: **`r round(mean(means_q9_s2),1)`**. -->
 
-After finnishing the experince, the main factor, that seems to drove participants' decision to take part in the process, is the interest of getting to know other's point of view regarding the condominum law. With a interestly high mean score of **`r round(means_q9_s2[8],2)`**, this factor showed to be, at the end, the big reason that triggered participation. Without beign included in the pre-experience survey, it turns out that after taken part of the process participants had gotten enriched so much from each other's point of views that assessed this factor as the main cause that drove their decisions to participate.
+After finnishing the experince, the main factor, that seems to drove participants' decision to take part in the process, is the interest of getting to know other's point of view regarding the condominum law. With a interestly high mean score of **`r round(means_q9_s2[8],2)`**, this factor has been pointed, in the last survey, as the biggest reason that triggered participation. Without beign included in the pre-experience survey, it turns out that after taken part of the process participants had gotten enriched so much from each other's point of views that assessed this factor as the main cause that drove their decisions to participate.
 
 The rest of the motivation factors showed interesting changes. Learning about the law still appears to be one of the most important factors. Even when the learning factor's mean score has slightly decrased (from **`r round(means_q1_s1[4],2)`** to **`r round(means_q9_s2[4],2)`**), its reduction does not appear to be significant.
 
