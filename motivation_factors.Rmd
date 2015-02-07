@@ -51,20 +51,28 @@ subset_q1_s1$option7 = as.numeric(subset_q1_s1$option7)
 means_q1_s1 = c(mean(subset_q1_s1$option1),mean(subset_q1_s1$option2),mean(subset_q1_s1$option3),
                 mean(subset_q1_s1$option4),mean(subset_q1_s1$option5),mean(subset_q1_s1$option6),
                 mean(subset_q1_s1$option7))
-options_q1_s1 = c("Solve problems...","Improve condominium law","Unhappy with my own...",
-                  "Learn more about...","Pass time","I'm curious","Discuss the topic with others")
+options_q1_s1 = c("Solve problems in\nhomeowners' associations",
+                  "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
+                  "Unhappy with my own\nhomeowner's association",
+                  "Learn more about the LLHCA",
+                  "Pass time","I'm curious","Discuss the topic with others")
 df = data.frame(options=options_q1_s1,levels=options_q1_s1,means=means_q1_s1)
 ```
 
 ```{r mot_fac_s1, echo=FALSE, fig.width=5, fig.height=6}
 # Set order of bars
-df$options <- factor(df$options, levels = c("Solve problems...","Improve condominium law","Unhappy with my own...",
-                                             "Learn more about...","Pass time","I'm curious","Discuss the topic with others"))
-ggplot(df, aes(x=options, y=means, ymax=6.5)) + 
-  geom_bar(aes(fill=options), stat="identity") +
-  geom_text(aes(label=round(means,2), x=options, y=means), position = position_dodge(width = 0.8), vjust=-.6) +
+df$options <- factor(df$options, levels = c("Solve problems in\nhomeowners' associations",
+                  "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
+                  "Unhappy with my own\nhomeowner's association",
+                  "Learn more about the LLHCA",
+                  "Pass time","I'm curious","Discuss the topic with others"))
+ggplot(df, aes(x=options, y=means, ymax=7)) + 
+  geom_bar(aes(fill=options), stat="identity", color="black") +
+  geom_text(aes(label=round(means,2), x=options, y=means), 
+            position = position_dodge(width = 0.8), vjust=-.6, size=6) +
   #geom_hline(yintercept = mean(means_q1_s1), linetype = 'dashed', color = 'black', size = 1) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size=12), axis.title.x = element_blank(),
+        axis.text.y = element_text(size=15), axis.title.y = element_text(size=12)) + 
   ylab("Means Scores") +
   guides(fill=FALSE)
 ```
@@ -116,24 +124,36 @@ subset_q9_s2$option5 = as.numeric(subset_q9_s2$option5)
 subset_q9_s2$option6 = as.numeric(subset_q9_s2$option6)
 subset_q9_s2$option7 = as.numeric(subset_q9_s2$option7)
 subset_q9_s2$option8 = as.numeric(subset_q9_s2$option8)
+#means_q9_s2 = c(mean(subset_q9_s2$option1),mean(subset_q9_s2$option2),mean(subset_q9_s2$option3),
+#                mean(subset_q9_s2$option4),mean(subset_q9_s2$option5),mean(subset_q9_s2$option6),
+#                mean(subset_q9_s2$option7),mean(subset_q9_s2$option8))
+
+# At the end we decided to get rid of the factor 8
 means_q9_s2 = c(mean(subset_q9_s2$option1),mean(subset_q9_s2$option2),mean(subset_q9_s2$option3),
                 mean(subset_q9_s2$option4),mean(subset_q9_s2$option5),mean(subset_q9_s2$option6),
-                mean(subset_q9_s2$option7),mean(subset_q9_s2$option8))
-options_q9_s2 = c("Solve problems...","Improve condominium law","Unhappy with my own...",
-                  "Learn more about...","Pass time","I'm curious","Discuss the topic with others",
-                  "Interested in the other's pov")
+                mean(subset_q9_s2$option7))
+mean_f8 = mean(subset_q9_s2$option8)
+options_q9_s2 = c("Solve problems in\nhomeowners' associations",
+                  "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
+                  "Unhappy with my own\nhomeowner's association",
+                  "Learn more about the LLHCA",
+                  "Pass time","I'm curious","Discuss the topic with others")
 df = data.frame(options=options_q9_s2,means=means_q9_s2)
 ```
 
 ```{r mot_fac_s2, echo=FALSE, fig.width=5, fig.height=6}
-df$options <- factor(df$options, levels = c("Solve problems...","Improve condominium law","Unhappy with my own...",
-                                            "Learn more about...","Pass time","I'm curious","Discuss the topic with others",
-                                            "Interested in the other's pov"))
-ggplot(df, aes(x=options, y=means, ymax=5.5)) + 
-  geom_bar(aes(fill=options), stat="identity") +
-  geom_text(aes(label=round(means,2), x=options, y=means), position = position_dodge(width = 0.8), vjust=-.6) +
+df$options = factor(df$options, levels = c("Solve problems in\nhomeowners' associations",
+                  "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
+                  "Unhappy with my own\nhomeowner's association",
+                  "Learn more about the LLHCA",
+                  "Pass time","I'm curious","Discuss the topic with others"))
+ggplot(df, aes(x=options, y=means, ymax=6)) + 
+  geom_bar(aes(fill=options), stat="identity", color="black") +
+  geom_text(aes(label=round(means,2), x=options, y=means), 
+            position = position_dodge(width = 0.8), vjust=-.6, size=6) +
   #geom_hline(yintercept = mean(means_q9_s2), linetype = 'dashed', color = 'black', size = 1) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title.x = element_blank()) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size=12), axis.title.x = element_blank(),
+        axis.text.y = element_text(size=15), axis.title.y = element_text(size=12)) + 
   ylab("Means Scores") +
   guides(fill=FALSE)
 ```
@@ -148,14 +168,16 @@ diff_o3_o3 = t.test(subset_q1_s1$option3,subset_q9_s2$option3)
 
 <!-- **Obs.** Dashed line showing the average of means: **`r round(mean(means_q9_s2),1)`**. -->
 
-After finnishing the experince, the main factor, that seems to drove participants' decision to take part in the process, is the interest of getting to know other's point of view regarding the condominum law. With a interestly high mean score of **`r round(means_q9_s2[8],2)`**, this factor has been pointed, in the last survey, as the biggest reason that triggered participation. Without beign included in the pre-experience survey, it turns out that after taken part of the process participants had gotten enriched so much from each other's point of views that assessed this factor as the main cause that drove their decisions to participate.
-
-The rest of the motivation factors showed interesting changes. Learning about the law still appears to be one of the most important factors. Even when the learning factor's mean score has slightly decrased (from **`r round(means_q1_s1[4],2)`** to **`r round(means_q9_s2[4],2)`**), its reduction does not appear to be significant.
+At the end of the experience, the motivation factors showed interesting changes. Learning about the law still appears to be one of the most important factors. Even when the learning factor's mean score has slightly deceased (from **`r round(means_q1_s1[4],2)`** to **`r round(means_q9_s2[4],2)`**), its reduction does not appear to be significant.
 
 On their own, improving the condominium law and solving conflicts in homeowners's associations factors showed to be relevant yet, considering that their mean scores still appear among the highest ones. However, they seem to be less important than before starting the process taking into consideration the significant decrease in their means scores, which passed from **`r round(means_q1_s1[2],2)`** to **`r round(means_q9_s2[2],2)` (p-value 0.28e-06)** and from **`r round(means_q1_s1[1],2)`** to **`r round(means_q9_s2[1],2)` (p-value 0.22e-04)**, respectively. 
 
 Discussing the condominium law with others is another factor that has became less important, noticing by the significant decrease **(p-value `r round(diff_o7_o7$p.value,3)`)** of its mean score, which passed from **`r round(means_q1_s1[7],2)`** to **`r round(means_q9_s2[7],2)`**. 
 
-It seems that after the experience the dissapoitment with the homeowners' association accounted less when decising to participate or not in the reform of the condominum law, although, the reduction in the mean score of this factor does not appear to be significant **(p-value `r round(diff_o3_o3$p.value,3)`)**.
+It seems that after the experience the disappointment with the homeowners' association accounted less when deciding to participate or not in the reform of the condominium law, although, the reduction in the mean score of this factor does not appear to be significant **(p-value `r round(diff_o3_o3$p.value,3)`)**.
 
 The low importance of curiosity and leisure as motivation factors, it seems to be confirmed by the similar and small means scores, **`r round(means_q9_s2[6],2)`** and **`r round(means_q9_s2[5],2)`** respectively, received again.
+
+#### The main motivation factor
+
+A posteriori, the main factor, that seems to drove participants' decision to take part in the process, is the interest of getting to know other's point of view regarding the condominium law. With a interestingly high mean score of **`r round(mean_f8,2)`**, this factor has been pointed, in the last survey, as the biggest reason that triggered participation. Without being included in the pre-experience survey, it turns out that after taken part of the process participants had gotten enriched so much from each other's point of views that assessed this factor as the main cause that drove their decisions to participate.
