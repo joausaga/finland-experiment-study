@@ -13,8 +13,8 @@ setwd(getwd())
 
 ```{r loading, echo=FALSE}
 #Reading data
-answers_q1_s1 = read.csv("./data/answers_q1_survey1.csv",header=T,sep=";",stringsAsFactors=F)
-answers_q9_s2 = read.csv("./data/answers_q9_survey2.csv",header=T,sep=";",stringsAsFactors=F)
+answers_q1_s1 = read.csv("./data/answers_q1_survey1_email.csv",header=T,sep=";",stringsAsFactors=F)
+answers_q9_s2 = read.csv("./data/answers_q9_survey2_email.csv",header=T,sep=";",stringsAsFactors=F)
 ```
 
 Analysis on the motivations for taking part of the crowdsourced process of reforming the condominium-law of Finland. 
@@ -33,7 +33,7 @@ Main Question: Why do you want to participate in the crowdsourcing process organ
 
 ```{r echo=FALSE}
 # Data cleaning and transformation
-subset_q1_s1 = answers_q1_s1[2:nrow(answers_q1_s1),]
+subset_q1_s1 = answers_q1_s1[2:nrow(answers_q1_s1),2:ncol(answers_q1_s1)]
 subset_q1_s1$option1[subset_q1_s1$option1==""] = "0"
 subset_q1_s1$option2[subset_q1_s1$option2==""] = "0"
 subset_q1_s1$option3[subset_q1_s1$option3==""] = "0"
@@ -51,22 +51,25 @@ subset_q1_s1$option7 = as.numeric(subset_q1_s1$option7)
 means_q1_s1 = c(mean(subset_q1_s1$option1),mean(subset_q1_s1$option2),mean(subset_q1_s1$option3),
                 mean(subset_q1_s1$option4),mean(subset_q1_s1$option5),mean(subset_q1_s1$option6),
                 mean(subset_q1_s1$option7))
+sd_q1_s1 = c(sd(subset_q1_s1$option1),sd(subset_q1_s1$option2),sd(subset_q1_s1$option3),
+             sd(subset_q1_s1$option4),sd(subset_q1_s1$option5),sd(subset_q1_s1$option6),
+             sd(subset_q1_s1$option7))
 options_q1_s1 = c("Solve problems in\nhomeowners' associations",
                   "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
                   "Unhappy with my own\nhomeowner's association",
                   "Learn more about the LLHCA",
                   "Pass time","I'm curious","Discuss the topic with others")
-df = data.frame(options=options_q1_s1,levels=options_q1_s1,means=means_q1_s1)
+df_s1 = data.frame(options=options_q1_s1,means=means_q1_s1)
 ```
 
 ```{r mot_fac_s1, echo=FALSE, fig.width=5, fig.height=6}
 # Set order of bars
-df$options <- factor(df$options, levels = c("Solve problems in\nhomeowners' associations",
+df_s1$options <- factor(df_s1$options, levels = c("Solve problems in\nhomeowners' associations",
                   "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
                   "Unhappy with my own\nhomeowner's association",
                   "Learn more about the LLHCA",
                   "Pass time","I'm curious","Discuss the topic with others"))
-ggplot(df, aes(x=options, y=means, ymax=7)) + 
+ggplot(df_s1, aes(x=options, y=means, ymax=7)) + 
   geom_bar(aes(fill=options), stat="identity", color="black") +
   geom_text(aes(label=round(means,2), x=options, y=means), 
             position = position_dodge(width = 0.8), vjust=-.6, size=6) +
@@ -107,7 +110,7 @@ Main Question: Why did you participate in the crowdsourcing process organized by
 
 ```{r echo=FALSE}
 # Data cleaning and transformation
-subset_q9_s2 = answers_q9_s2[2:nrow(answers_q9_s2),]
+subset_q9_s2 = answers_q9_s2[2:nrow(answers_q9_s2),2:ncol(answers_q9_s2)]
 subset_q9_s2$option1[subset_q9_s2$option1==""] = "0"
 subset_q9_s2$option2[subset_q9_s2$option2==""] = "0"
 subset_q9_s2$option3[subset_q9_s2$option3==""] = "0"
@@ -133,21 +136,24 @@ means_q9_s2 = c(mean(subset_q9_s2$option1),mean(subset_q9_s2$option2),mean(subse
                 mean(subset_q9_s2$option4),mean(subset_q9_s2$option5),mean(subset_q9_s2$option6),
                 mean(subset_q9_s2$option7))
 mean_f8 = mean(subset_q9_s2$option8)
+sd_q9_s2 = c(sd(subset_q9_s2$option1),sd(subset_q9_s2$option2),sd(subset_q9_s2$option3),
+             sd(subset_q9_s2$option4),mean(subset_q9_s2$option5),sd(subset_q9_s2$option6),
+             sd(subset_q9_s2$option7))
 options_q9_s2 = c("Solve problems in\nhomeowners' associations",
                   "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
                   "Unhappy with my own\nhomeowner's association",
                   "Learn more about the LLHCA",
                   "Pass time","I'm curious","Discuss the topic with others")
-df = data.frame(options=options_q9_s2,means=means_q9_s2)
+df_s2 = data.frame(options=options_q9_s2,means=means_q9_s2)
 ```
 
 ```{r mot_fac_s2, echo=FALSE, fig.width=5, fig.height=6}
-df$options = factor(df$options, levels = c("Solve problems in\nhomeowners' associations",
+df_s2$options = factor(df_s2$options, levels = c("Solve problems in\nhomeowners' associations",
                   "Improve the Limited Liability\nHousing Companies Act (LLHCA)",
                   "Unhappy with my own\nhomeowner's association",
                   "Learn more about the LLHCA",
                   "Pass time","I'm curious","Discuss the topic with others"))
-ggplot(df, aes(x=options, y=means, ymax=6)) + 
+ggplot(df_s2, aes(x=options, y=means, ymax=6)) + 
   geom_bar(aes(fill=options), stat="identity", color="black") +
   geom_text(aes(label=round(means,2), x=options, y=means), 
             position = position_dodge(width = 0.8), vjust=-.6, size=6) +
@@ -162,6 +168,8 @@ ggplot(df, aes(x=options, y=means, ymax=6)) +
 diff_o1_o1 = t.test(subset_q1_s1$option1,subset_q9_s2$option1)
 diff_o2_o2 = t.test(subset_q1_s1$option2,subset_q9_s2$option2)
 diff_o4_o4 = t.test(subset_q1_s1$option4,subset_q9_s2$option4)
+diff_o5_o5 = t.test(subset_q1_s1$option5,subset_q9_s2$option5)
+diff_o6_o6 = t.test(subset_q1_s1$option6,subset_q9_s2$option6)
 diff_o7_o7 = t.test(subset_q1_s1$option7,subset_q9_s2$option7)
 diff_o3_o3 = t.test(subset_q1_s1$option3,subset_q9_s2$option3)
 ```
@@ -181,3 +189,110 @@ The low importance of curiosity and leisure as motivation factors, it seems to b
 #### The main motivation factor
 
 A posteriori, the main factor, that seems to drove participants' decision to take part in the process, is the interest of getting to know other's point of view regarding the condominium law. With a interestingly high mean score of **`r round(mean_f8,2)`**, this factor has been pointed, in the last survey, as the biggest reason that triggered participation. Without being included in the pre-experience survey, it turns out that after taken part of the process participants had gotten enriched so much from each other's point of views that assessed this factor as the main cause that drove their decisions to participate.
+
+### Comparison
+
+```{r echo=FALSE, fig.width=7, fig.height=8}
+# Create a dataframe containing those who have completed survey 1 and survey 2
+subset_s1 = answers_q1_s1[1,]
+for (i in 2:nrow(answers_q1_s1)) {
+  row = answers_q1_s1[i,]
+  if (!row$email %in% subset_s1$email) {
+    if (row$email %in% answers_q9_s2$email) {
+      subset_s1 = rbind(subset_s1,row)
+    }
+  }
+}
+
+# Remove duplicates in survey 2
+subset_s2 = answers_q9_s2[1,]
+for (i in 2:nrow(answers_q9_s2)) {
+  row = answers_q9_s2[i,]
+  if (!row$email %in% subset_s2$email) {
+    subset_s2 = rbind(subset_s2,row)
+  }
+}
+
+# Remove test user
+subset_s1 = subset_s1[-(subset_s1$email=="testi@grr.la"),]
+subset_s2 = subset_s2[-(subset_s2$email=="matti.nelimarkka@hiit.fi"),]
+
+# Replace all NAs with 0
+subset_s1[is.na(subset_s1)] = 0
+subset_s2[is.na(subset_s2)] = 0
+
+# Calculate mean, median, and sd on both subsets
+means_subset_s1 = c(mean(subset_s1$option1),mean(subset_s1$option2),mean(subset_s1$option3),
+                    mean(subset_s1$option4),mean(subset_s1$option5),mean(subset_s1$option6), 
+                    mean(subset_s1$option7))
+median_subset_s1 = c(median(subset_s1$option1),median(subset_s1$option2),median(subset_s1$option3),
+                     median(subset_s1$option4),median(subset_s1$option5),median(subset_s1$option6), 
+                     median(subset_s1$option7))
+sd_q1_s1 = c(sd(subset_s1$option1),sd(subset_s1$option2),sd(subset_s1$option3),sd(subset_s1$option4),
+             sd(subset_s1$option5),sd(subset_s1$option6),sd(subset_s1$option7))
+
+means_subset_s2 = c(mean(subset_s2$option1),mean(subset_s2$option2),mean(subset_s2$option3),
+                    mean(subset_s2$option4),mean(subset_s2$option5),mean(subset_s2$option6), 
+                    mean(subset_s2$option7))
+median_subset_s2 = c(median(subset_s2$option1),median(subset_s2$option2),median(subset_s2$option3),
+                     median(subset_s2$option4),median(subset_s2$option5),median(subset_s2$option6), 
+                     median(subset_s2$option7))
+sd_subset_s2 = c(sd(subset_s2$option1),sd(subset_s2$option2),sd(subset_s2$option3),sd(subset_s2$option4),
+                 sd(subset_s2$option5),sd(subset_s2$option6),sd(subset_s2$option7))
+
+# Compare the differences in the mean of scores
+diff_o1_o1 = t.test(subset_s1$option1,subset_s2$option1, paired=T)
+diff_o2_o2 = t.test(subset_s1$option2,subset_s2$option2, paired=T)
+diff_o3_o3 = t.test(subset_s1$option3,subset_s2$option3, paired=T)
+diff_o4_o4 = t.test(subset_s1$option4,subset_s2$option4, paired=T)
+diff_o5_o5 = t.test(subset_s1$option5,subset_s2$option5, paired=T)
+diff_o6_o6 = t.test(subset_s1$option6,subset_s2$option6, paired=T)
+diff_o7_o7 = t.test(subset_s1$option7,subset_s2$option7, paired=T)
+
+# Create dataframe to compare factors' scores in both surveys
+if (exists("df_s1s2")) {remove(df_s1s2)}
+options = c("F1. Solve problems in\nhomeowners' associations",
+            "F2. Improve the Limited Liability\nHousing Companies Act (LLHCA)",
+            "F3 .Unhappy with my own\nhomeowner's association",
+            "F4. Learn more about the LLHCA",
+            "F5. Pass time","F6. I'm curious","F7. Discuss the topic with others")
+survey1 = "Pre-Process"
+survey2 = "Post-Process"
+# Put scores of survey 1
+for (i in 1:nrow(subset_s1)) {
+  scores = subset_s1[i,2:ncol(subset_s1)]
+  vec_scores = c(scores[[1]],scores[[2]],scores[[3]],scores[[4]],scores[[5]],scores[[6]],scores[[7]])
+  if (!exists("df_s1s2")) {
+    df_s1s2 = data.frame(user=c(rep.int(i, 7)),option=options,score=vec_scores,survey=c(survey1))
+  } else {
+    mat_user = c(rep.int(i, 7))
+    mat_user = cbind(mat_user,options)
+    mat_user = cbind(mat_user,vec_scores)
+    mat_user = cbind(mat_user,rep(survey1, 7))
+    colnames(mat_user) = c("user","option","score","survey")
+    df_s1s2 = rbind(df_s1s2,mat_user)
+  } 
+}  
+# Put scores of survey 2
+for (i in 1:nrow(subset_s2)) {
+  scores = subset_s2[i,2:(ncol(subset_s2)-1)]
+  vec_scores = c(scores[[1]],scores[[2]],scores[[3]],scores[[4]],scores[[5]],scores[[6]],scores[[7]])
+  mat_user = c(rep.int(i, 7))
+  mat_user = cbind(mat_user,options)
+  mat_user = cbind(mat_user,vec_scores)
+  mat_user = cbind(mat_user,rep(survey2, 7))
+  colnames(mat_user) = c("user","option","score","survey")
+  df_s1s2 = rbind(df_s1s2,mat_user)
+}
+# Transform score column into numeric
+df_s1s2$score = as.numeric(df_s1s2$score)
+ggplot(df_s1s2, aes(x=option, y=score, fill=option)) + 
+    geom_boxplot() + 
+    facet_grid(. ~ survey) +
+    scale_y_continuous(breaks=c(0:7)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, size=15), axis.title.x = element_blank(),
+          axis.text.y = element_text(size=17), axis.title.y = element_text(size=15),
+          strip.text.x = element_text(size=18, face="bold")) + 
+  labs(y="Scores") +
+    guides(fill=FALSE)
+```
