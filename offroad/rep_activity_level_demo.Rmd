@@ -1,0 +1,1766 @@
+---
+title: "Activity Levels and Demographic"
+output: html_document
+---
+
+This study analyzes whether exists any association between participants' activity levels and their demographic characteristics.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Load libraries
+library(dplyr)
+library(xlsx)
+library(ggplot2)
+library(nortest)
+library(xtable)
+library(knitr)
+source('demographic_offtrafficlaw.R')
+```
+
+```{r, echo=FALSE}
+# Load datasets
+raw_survey = read.csv("./data/surveyofftrafficlaw.csv", sep=",", header=T, stringsAsFactors=F)
+raw_survey = raw_survey[-1,]
+raw_survey = raw_survey %>% filter(V10 == 1)  # Discard those that dind't complete the survey
+survey = raw_survey %>% select(V5, Q23:Q34_11) %>% select(-Q28) %>% select(-Q33_TEXT)
+rownames(survey) = NULL
+colnames(survey) = c('email','gender','age','basic_edu','occupational_edu','situation',
+                     'occupational_group','living_area','living_zone','time_online','political_party',
+                     'written an op-ed to a newspaper', 'written in a blog', 'written on online forums', 
+                     'written to an MP', 'written to a municipal councilor',
+                     'participated in municipality council', 'participated in committee meetings', 
+                     'signed a petition', 'initiated a petition', 
+                     'participated in peaceful demonstrations', 'volunteered in a NGO')
+participant_data = read.xlsx("./data/member_data.xls", sheetIndex=1, colIndex=c(2,7,8,9))
+```
+
+```{r, echo=FALSE}
+# Tranforming and pre-processing the data
+# 1) Separate participants that did and didn't answer the survey
+participant_survey = participant_data %>% filter(email %in% survey$email)
+participant_no_survey = participant_data %>% filter(!email %in% survey$email)
+# 2) Identify outliers from the set that did answer the survey
+threshold = sd(participant_survey$ideas) * 2 + mean(participant_survey$ideas)  # two standard deviation beyond the mean
+part_survey_ideas_outliers = filter(participant_survey, ideas > threshold)
+threshold = sd(participant_survey$votes) * 2 + mean(participant_survey$votes)
+part_survey_votes_outliers = filter(participant_survey, votes > threshold)
+threshold = sd(participant_survey$comments) * 2 + mean(participant_survey$comments)  # two standard deviation beyond the mean
+part_survey_comments_outliers = filter(participant_survey, comments > threshold)
+#ggplot(participant_survey, aes(x=comments)) + geom_histogram(binwidth=1)
+survey_outliers = as.character(intersect(part_survey_ideas_outliers,part_survey_votes_outliers)$email)
+survey_outliers = c(survey_outliers, as.character(intersect(part_survey_ideas_outliers,part_survey_comments_outliers)$email))
+survey_outliers = c(survey_outliers, as.character(intersect(part_survey_votes_outliers,part_survey_comments_outliers)$email))
+survey_outliers = unique(survey_outliers)
+# 3) Remove outliers
+part_survey_no_outliers = filter(participant_survey, !email %in% survey_outliers)
+# 4) Identify outliers from the set that did not answer the survey
+threshold = sd(participant_no_survey$ideas) * 2 + mean(participant_no_survey$ideas)  # two standard deviation beyond the mean
+part_no_survey_ideas_outliers = filter(participant_no_survey, ideas > threshold)
+threshold = 200
+part_no_survey_votes_outliers = filter(participant_no_survey, votes > threshold)
+threshold = 50
+part_no_survey_comments_outliers = filter(participant_no_survey, comments > threshold)
+no_survey_outliers = as.character(intersect(part_no_survey_ideas_outliers,part_no_survey_votes_outliers)$email)
+no_survey_outliers = c(no_survey_outliers, as.character(intersect(part_no_survey_ideas_outliers,part_no_survey_comments_outliers)$email))
+no_survey_outliers = c(no_survey_outliers, as.character(intersect(part_no_survey_votes_outliers,part_no_survey_comments_outliers)$email))
+no_survey_outliers = unique(no_survey_outliers)
+# 5) Remove outliers
+part_no_survey_no_outliers = filter(participant_no_survey, !email %in% no_survey_outliers)
+# 6) Merge datasets
+merged_ds = merge(part_survey_no_outliers,survey,by.x='email',by.y='email')
+# 7) Add a column to contain the sum of ideas, votes and comments
+merged_ds = merged_ds %>% mutate(content=ideas+votes+comments)
+dataset_size = nrow(merged_ds)
+findings = c()
+```
+
+The study involves two datasets. On one hand, the dataset containing information about the activity level of participants (number of ideas, votes and comments) of the crowdsourcing off-road traffic law process. On the other hand, the dataset containing the answers to the survey.
+
+Before starting the study, the dataset with the information about the activity level of participants was pre-processed in the following way:
+
+* Participants that didn't answer the survey were removed;
+* Outliers were removed.
+
+From the survey dataset, it was removed responders that dind't answer none of the 23 to 33 questions.
+
+Later on, both datasets were marged taking the email adresses as the common data.
+
+Final dataset size: **`r dataset_size`**
+
+## Survey Responders vs. Unanswered Participants
+
+```{r echo=FALSE}
+groups = c('answered_survey','not_answered_survey')
+part_survey_no_outliers = part_survey_no_outliers %>% mutate(group=groups[1])
+part_no_survey_no_outliers = part_no_survey_no_outliers %>% mutate(group=groups[2])
+merged_ds_noq = rbind(part_survey_no_outliers,part_no_survey_no_outliers)
+merged_ds_noq = merged_ds_noq %>% mutate(content=ideas+votes+comments)
+rep = get_report_activity_level(merged_ds_noq, groups)
+```
+
+### Ideas vs. Condition (answered/not answered survey)
+
+```{r, echo=FALSE, fig.width=6, fig.height=5}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_noq, aes(x=group, y=ideas, fill=group)) + geom_boxplot()
+```
+      
+      
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c('ideas_condition',round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Condition (answered/not answered survey)
+
+```{r, echo=FALSE, fig.width=6, fig.height=5}
+# Ploting votes by groups
+var = 'votes'
+ggplot(merged_ds_noq, aes(x=group, y=votes, fill=group)) + geom_boxplot()
+```
+     
+     
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c('votes_condition',round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Condition (answered/not answered survey)
+
+```{r, echo=FALSE, fig.width=6, fig.height=5}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_noq, aes(x=group, y=comments, fill=group)) + geom_boxplot()
+```
+      
+      
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_condition',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Condition (answered/not answered survey)
+
+```{r, echo=FALSE, fig.width=6, fig.height=5}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_noq, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(size=22), axis.title.x = element_blank(),
+        axis.text.y = element_text(size=22), axis.title.y = element_text(size=22)) +
+  ylab("Activity Level (Ideas+Vote+Comments Count)") +
+  guides(fill=FALSE)
+```
+
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_condition',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q23: Gender and Activity Level
+
+```{r q_23, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% select(email, ideas, votes, comments, content, gender) %>% filter(gender!='')
+groups = c('female','male')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$gender==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+### Ideas vs. Gender
+
+```{r, echo=FALSE, fig.width=4, fig.height=3}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(size=25), axis.title.x = element_blank(),
+        axis.text.y = element_text(size=25), axis.title.y = element_text(size=22)) +
+  guides(fill=FALSE)
+```
+      
+      
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_gender',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Gender
+
+```{r, echo=FALSE, fig.width=4, fig.height=3}
+# Ploting votes by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot()
+```
+     
+     
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_gender',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Gender
+
+```{r, echo=FALSE, fig.width=4, fig.height=3}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot()
+```
+      
+      
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_gender',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Gender
+
+```{r, echo=FALSE, fig.width=4, fig.height=3}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot()
+```
+
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_gender',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q24: Age and Activity Level
+
+```{r q24, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(age != '') %>% select(email, ideas, votes, comments, content, age)
+groups = c('under_13','13_17','18_25','26_34','35_54','55_64','65_over')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$age==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+tot_ages = nrow(merged_ds_q)
+under_25 = (nrow(merged_ds_q[merged_ds_q$group=='13_17',]) +
+            nrow(merged_ds_q[merged_ds_q$group=='18_25',]))
+groups2 = c('25_under','65_over','26-34','55-64','35-54')
+age = data.frame(options=groups2,
+                 quantity=c(under_25*100/tot_ages,
+                            nrow(merged_ds_q[merged_ds_q$group=='65_over',])*100/tot_ages,
+                            nrow(merged_ds_q[merged_ds_q$group=='26_34',])*100/tot_ages,
+                            nrow(merged_ds_q[merged_ds_q$group=='55_64',])*100/tot_ages,
+                            nrow(merged_ds_q[merged_ds_q$group=='35_54',])*100/tot_ages))
+stacked_bar_plot = ggplot(age, aes(x=1, y=quantity, fill=options)) +
+  geom_bar(stat="identity", color='black') +  # Black border
+  guides(fill=guide_legend(override.aes=list(colour=NA)))  + # Remove black diagonals from legend
+  scale_fill_discrete(name="Ages")  + # Change lengend title
+  theme(axis.text.y=element_blank(), axis.text.x=element_blank(), axis.title=element_blank(), 
+        axis.ticks=element_blank(), legend.text=element_text(size=16),
+        legend.title=element_text(size=20)) +
+  guides(fill=FALSE)
+```
+
+### Ideas vs. Age
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_age',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Age
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_age',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Age
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_age',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Age
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_age',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q25: Basic Education and Activity Level
+
+```{r q25, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(basic_edu != '') %>% 
+  select(email, ideas, votes, comments, content, basic_edu)
+groups = c('primary','secundary','still_school','upper','no_formal')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$basic_edu==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+### Ideas vs. Basic Education
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_basic_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Basic Education
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_basic_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Basic Education
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_basic_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Basic Education
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_basic_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q26: Occupational Education and Activity Level
+
+```{r q_26, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(occupational_edu != '') %>% 
+  select(email, ideas, votes, comments, content, occupational_edu)
+groups = c('still_school','vocational_school','college_level','studies_uni',
+           'science_uni_degree','bachelor','master','doctor','no_formal_occupational_edu')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$occupational_edu==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+tot_ocu = nrow(merged_ds_q)
+vocational = nrow(merged_ds_q[merged_ds_q$group=='vocational_school',])*100/tot_ocu
+college = nrow(merged_ds_q[merged_ds_q$group=='college_level',])*100/tot_ocu
+master = nrow(merged_ds_q[merged_ds_q$group=='master',])*100/tot_ocu
+science = nrow(merged_ds_q[merged_ds_q$group=='science_uni_degree',])*100/tot_ocu
+noformal = nrow(merged_ds_q[merged_ds_q$group=='no_formal_occupational_edu',])*100/tot_ocu
+other = (nrow(merged_ds_q[merged_ds_q$group=='still_school',]) +
+         nrow(merged_ds_q[merged_ds_q$group=='studies_uni',]) +
+         nrow(merged_ds_q[merged_ds_q$group=='bachelor',]) +
+         nrow(merged_ds_q[merged_ds_q$group=='doctor',]))*100/tot_ocu
+quantity = c(other,noformal,science,master,college,vocational)
+ocu = data.frame(option=c('other','no_formal','science','master','college','vocational'), 
+                 quantity=quantity)
+stacked_bar_plot = ggplot(ocu, aes(x=1, y=quantity, fill=option)) +
+  geom_bar(stat="identity", color='black') +  # Black border
+  guides(fill=guide_legend(override.aes=list(colour=NA)))  + # Remove black diagonals from legend
+  scale_fill_discrete(name="O. Education")  + # Change lengend title
+  theme(axis.text.y=element_blank(), axis.text.x=element_blank(), axis.title=element_blank(), 
+        axis.ticks=element_blank(), legend.text=element_text(size=16),
+        legend.title=element_text(size=20)) +
+  guides(fill=FALSE)
+```
+
+### Ideas vs. Occupational Education
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_occupational_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Occupational Education
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_occupational_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Occupational Education
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_occupational_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Occupational Education
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_occupational_education',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q27: Current Situation in Life and Activity Level
+
+```{r q_27, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(situation != '') %>% 
+  select(email, ideas, votes, comments, content, situation)
+groups = c('full-time','half-day','part-time','family_bz', 'unemployed','student','retired_age',
+           'retired','household','conscript','parental_leave')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$situation==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+### Ideas vs. Current Situation
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_current_situation',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Current Situation
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_current_situation',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Current Situation
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_current_situation',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Current Situation
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_current_situation',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q29: Occupational Group in Life and Activity Level
+
+```{r q_29, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(occupational_group != '') %>% 
+  select(email, ideas, votes, comments, content, occupational_group)
+groups = c('farming(1)','employer(2)','managing_pos(3)','higher_ranking_official(4)', 
+           'jr_official(5)','employee(6)','student(7)', 'stay-at-home(8)','unemployed(9)','other(10)')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$occupational_group==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+tot_ocu = nrow(merged_ds_q)
+farming = nrow(merged_ds_q[merged_ds_q$occupational_group==1,])
+employer = nrow(merged_ds_q[merged_ds_q$occupational_group==2,])
+official = nrow(merged_ds_q[merged_ds_q$occupational_group==4,])
+jr_official = nrow(merged_ds_q[merged_ds_q$occupational_group==5,])
+employee = nrow(merged_ds_q[merged_ds_q$occupational_group==6,])
+other = 0
+for (idx in 1:length(groups)) {
+  if (idx != 1 & idx != 2 & idx != 4 & idx != 5 & idx != 6) {
+    other = other + nrow(merged_ds_q[merged_ds_q$group==groups[idx],])
+  } 
+}
+quantity = c(other, jr_official, employer, farming, employee, official)
+per_quantity = quantity * 100 /tot_ocu
+ocu = data.frame(option=c('other','jr_official','employer','farming', 'employee', 'official'), 
+                 quantity=per_quantity)
+stacked_bar_plot = ggplot(ocu, aes(x=1, y=quantity, fill=option)) +
+  geom_bar(stat="identity", color='black') +  # Black border
+  guides(fill=guide_legend(override.aes=list(colour=NA)))  + # Remove black diagonals from legend
+  scale_fill_discrete(name="O. Group")  + # Change lengend title
+  theme(axis.text.y=element_blank(), axis.text.x=element_blank(), axis.title=element_blank(), 
+        axis.ticks=element_blank(), legend.text=element_text(size=16),
+        legend.title=element_text(size=20)) +
+  guides(fill=FALSE)
+```
+
+### Ideas vs. Occupational Group
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_ocupational_group',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Occupational Group
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_ocupational_group',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Occupational Group
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_ocupational_group',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Occupational Group
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_ocupational_group',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q30: Living Area and Activity Level
+
+```{r q_30, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(living_area != '') %>% 
+  select(email, ideas, votes, comments, content, living_area)
+groups = c('southern(1)','western(2)','eastern(3)','middle(4)', 'northern(5)','aland(6)','abroad(7)')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$living_area==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+tot_ocu = nrow(merged_ds_q)
+southern = nrow(merged_ds_q[merged_ds_q$group=='southern(1)',])*100/tot_ocu
+northern = nrow(merged_ds_q[merged_ds_q$group=='northern(5)',])*100/tot_ocu
+western = nrow(merged_ds_q[merged_ds_q$group=='western(2)',])*100/tot_ocu
+other = 0
+for (idx in 1:length(groups)) {
+  if (idx != 1 & idx != 2 & idx != 5) {
+    other = other + nrow(merged_ds_q[merged_ds_q$group==groups[idx],])
+  } 
+}
+other = other * 100 / tot_ocu
+quantity = c(western, other, northern, southern)
+ocu = data.frame(option=c('western', 'other', 'northern', 'southern'), quantity=quantity)
+stacked_bar_plot = ggplot(ocu, aes(x=1, y=quantity, fill=option)) +
+  geom_bar(stat="identity", color='black') +  # Black border
+  guides(fill=guide_legend(override.aes=list(colour=NA)))  + # Remove black diagonals from legend
+  scale_fill_discrete(name="Living Area")  + # Change lengend title
+  theme(axis.text.y=element_blank(), axis.text.x=element_blank(), axis.title=element_blank(), 
+        axis.ticks=element_blank(), legend.text=element_text(size=16),
+        legend.title=element_text(size=20)) +
+  guides(fill=FALSE)
+```
+
+### Ideas vs. Living Area
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_area',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Living Area
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_area',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Living Area
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_area',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Living Area
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_area',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q31: Living Zone and Activity Level
+
+```{r q31, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(living_zone != '') %>% 
+  select(email, ideas, votes, comments, content, living_zone)
+groups = c('city_center(1)','suburb(2)','municipality(3)','country_side(4)')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$living_zone==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+```{r, echo=FALSE, fig.width=5, fig.height=4}
+tot_ocu = nrow(merged_ds_q)
+rural = nrow(merged_ds_q[merged_ds_q$group=='country_side(4)',])*100/tot_ocu
+suburb = nrow(merged_ds_q[merged_ds_q$group=='suburb(2)',])*100/tot_ocu
+other = 0
+for (idx in 1:length(groups)) {
+  if (idx != 2 & idx != 4) {
+    other = other + nrow(merged_ds_q[merged_ds_q$group==groups[idx],])
+  } 
+}
+other = other * 100 / tot_ocu
+quantity = c(other, suburb, rural)
+ocu = data.frame(option=c('other', 'suburb', 'rural'), quantity=quantity)
+stacked_bar_plot = ggplot(ocu, aes(x=1, y=quantity, fill=option)) +
+  geom_bar(stat="identity", color='black') +  # Black border
+  guides(fill=guide_legend(override.aes=list(colour=NA)))  + # Remove black diagonals from legend
+  scale_fill_discrete(name="Living Area")  + # Change lengend title
+  theme(axis.text.y=element_blank(), axis.text.x=element_blank(), axis.title=element_blank(), 
+        axis.ticks=element_blank(), legend.text=element_text(size=16),
+        legend.title=element_text(size=20)) +
+  guides(fill=FALSE)
+```
+
+### Ideas vs. Living Zone
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_zone',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Living Zone
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_zone',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Living Zone
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_zone',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Living Zone
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot()
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_living_zone',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q32: Time Online and Activity Level
+
+```{r q32, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(time_online != '') %>% 
+  select(email, ideas, votes, comments, content, time_online)
+groups = c('couple_times_month(1)','couple_times_week(2)','less_half_hour_day(3)',
+           'half_hour_to_hour_day(4)','more_than_hour_no_more_than_two_day(5)',
+           'more_than_two_hours_no_more_than_three_day(6)', 'over_three(7)')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$time_online==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+### Ideas vs. Time Online
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_time_online',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Time Online
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_time_online',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Time Online
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_time_online',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Time Online
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_time_online',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q33: Political Party and Activity Level
+
+```{r q33, echo=FALSE}
+# Discard those that didn't answer this question
+merged_ds_q = merged_ds %>% filter(political_party != '') %>% 
+  select(email, ideas, votes, comments, content, political_party)
+groups = c('sdp(1)','centre(2)','national_coalition(3)', 'swedish(4)','christian_democrat(5)',
+           'greens_finland(6)', 'left_alliance(7)', 'true_finns(8)', 'communist(9)',
+           'party_of_seniors(10)', 'communist_workers(11)', 'workers(12)', 'independence(13)',
+           'for_the_poor(14)', 'pirate(15)', 'change(16)', 'freedom(17)', 'other(18)')
+# Create a column to contain the groups
+for (idx in 1:length(groups)) {
+  merged_ds_q$group[merged_ds_q$political_party==idx] = groups[idx]
+}
+rep = get_report_activity_level(merged_ds_q, groups)
+```
+
+### Ideas vs. Political Party
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'ideas'
+ggplot(merged_ds_q, aes(x=group, y=ideas, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_political_party',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Votes vs. Political Party
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'votes'
+ggplot(merged_ds_q, aes(x=group, y=votes, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_political_party',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### Comments vs. Political Party
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'comments'
+ggplot(merged_ds_q, aes(x=group, y=comments, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_political_party',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+### All Content (ideas+votes+comments) vs. Political Party
+
+```{r, echo=FALSE, fig.width=7, fig.height=6}
+# Ploting ideas by groups
+var = 'content'
+ggplot(merged_ds_q, aes(x=group, y=content, fill=group)) + geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+```{r, echo=FALSE,results='asis'}
+table = data.frame(N=rep[[var]]$ns,means=rep[[var]]$means,median=rep[[var]]$medians)
+rownames(table) = groups
+print(xtable(table, align=(rep('c',ncol(table)+1))), type="html", comment=F, include.rownames=T)
+if (rep[[var]]$p_value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_political_party',sep=''),round(rep[[var]]$p_value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(rep[[var]]$p_value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r rep[[var]]$test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r rep[[var]]$max`
+
+
+## Q34: Participants' Civic Life
+```{r q34, echo=FALSE}
+merged_ds_q = merged_ds %>% select(15:25)
+totals = c()
+inst_idx = c(1,3,4,5,8,11)
+for (idx in 1:ncol(merged_ds_q)) {
+  if (idx %in% inst_idx) {
+    totals = c(totals,length(merged_ds_q[merged_ds_q[,idx]=='1',idx])) 
+  }
+}
+totals = sort(totals)
+per_totals = round((totals/nrow(merged_ds_q)) * 100,0)
+graph_dat = data.frame(activity=factor(c('Written an op-ed to a newspaper', 'Contacted MP', 
+                                         'Contacted municipal representative', 'Signed an initiative', 
+                                         'Volunteered in an ORG', 'Written on online forums'),
+                                       levels=c('Written an op-ed to a newspaper', 'Contacted MP', 
+                                                'Contacted municipal representative', 'Signed an initiative',
+                                                'Volunteered in an ORG', 'Written on online forums')),
+                       total=totals,
+                       per=per_totals)
+bar_plot = ggplot(graph_dat, aes(x=activity, y=per, fill=activity)) + geom_bar(stat="identity") + ylim(0, 90) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size=25, colour='black'), 
+        axis.title.x = element_blank(),
+        axis.text.y = element_text(size=18), axis.title.y = element_blank()) + 
+  guides(fill=FALSE)
+```
+
+```{r, echo=FALSE}
+merged_ds_q = merged_ds %>% select(email, ideas, votes, comments, content, 15:25)
+groups = c('written an op-ed to a newspaper', 'written in a blog', 'written on online forums', 
+           'written to an MP', 'written to a municipal councilor',
+           'participated in municipality council', 'participated in committee meetings', 
+           'signed a petition', 'initiated a petition', 
+           'participated in peaceful demonstrations', 'volunteered in a NGO')
+test = "kruskal"
+```
+
+### Ideas vs. Civic Life
+
+```{r, echo=FALSE}
+var = 'ideas'
+data = list()
+idx_grp = 1
+for (idx in 6:16) {
+  group = groups[idx_grp]
+  data[[group]] = merged_ds_q[merged_ds_q[,idx]=='1',var]
+  idx_grp = idx_grp + 1
+}
+max = -1
+max_group = ''
+for (group in groups) {
+  if (median(data[[group]]) > 0) {
+    group_total =  median(data[[group]])
+  } 
+  else {
+    group_total =  mean(data[[group]])
+  }
+  
+  if (group_total > max) {
+    max = group_total
+    max_group = group
+  }
+}
+res = kruskal.test(data)
+if (res$p.value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_civic_life',sep=''),round(res$p.value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r max_group`
+
+### Votes vs. Civic Life
+
+```{r, echo=FALSE}
+var = 'votes'
+data = list()
+idx_grp = 1
+for (idx in 6:16) {
+  group = groups[idx_grp]
+  data[[group]] = merged_ds_q[merged_ds_q[,idx]=='1',var]
+  idx_grp = idx_grp + 1
+}
+max = -1
+max_group = ''
+for (group in groups) {
+  if (median(data[[group]]) > 0) {
+    group_total =  median(data[[group]])
+  } 
+  else {
+    group_total =  mean(data[[group]])
+  }
+  
+  if (group_total > max) {
+    max = group_total
+    max_group = group
+  }
+}
+res = kruskal.test(data)
+if (res$p.value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_civic_life',sep=''),round(res$p.value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r max_group`
+
+### Comments vs. Civic Life
+
+```{r, echo=FALSE}
+var = 'comments'
+data = list()
+idx_grp = 1
+for (idx in 6:16) {
+  group = groups[idx_grp]
+  data[[group]] = merged_ds_q[merged_ds_q[,idx]=='1',var]
+  idx_grp = idx_grp + 1
+}
+max = -1
+max_group = ''
+for (group in groups) {
+  if (median(data[[group]]) > 0) {
+    group_total =  median(data[[group]])
+  } 
+  else {
+    group_total =  mean(data[[group]])
+  }
+  
+  if (group_total > max) {
+    max = group_total
+    max_group = group
+  }
+}
+res = kruskal.test(data)
+if (res$p.value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_civic_life',sep=''),round(res$p.value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r max_group`
+
+### Content (ideas+votes+comments) vs. Civic Life
+
+```{r, echo=FALSE}
+var = 'content'
+data = list()
+idx_grp = 1
+for (idx in 6:16) {
+  group = groups[idx_grp]
+  data[[group]] = merged_ds_q[merged_ds_q[,idx]=='1',var]
+  idx_grp = idx_grp + 1
+}
+max = -1
+max_group = ''
+for (group in groups) {
+  if (median(data[[group]]) > 0) {
+    group_total =  median(data[[group]])
+  } 
+  else {
+    group_total =  mean(data[[group]])
+  }
+  
+  if (group_total > max) {
+    max = group_total
+    max_group = group
+  }
+}
+res = kruskal.test(data)
+if (res$p.value<=0.05) {
+  print_diff = paste('The are significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+  findings = rbind(findings, c(paste(var,'_civic_life',sep=''),round(res$p.value,3)))
+} else {
+  print_diff = paste('The are not significant differences between groups, p-value= ',
+                     round(res$p.value,3),sep='')
+}
+```
+  
+**Obs.** `r print_diff`. Test: `r test`. Significant Level: 0.05
+
+The most productive group in the average generation of `r var` is `r max_group`
+
+
+## Significant Results (p-value < 0.05)
+
+```{r findigns, echo=FALSE}
+findings_table = data.frame(Category=findings[,1], P_value=findings[,2])
+kable(findings_table, format = "pandoc", align=c('c','c'), row.names=F)
+```
