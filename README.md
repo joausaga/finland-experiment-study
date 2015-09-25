@@ -1,6 +1,6 @@
-# Qualitative analyses of Finland's crowdsourced policiy making processes 
+# The Finnish Experiment - Qualitative Study 
 This repository contains the r-scripts used to study how collective intelligence, whether gathered by crowdsourcing and/or principles of open innovation, 
-impacts processes of policy making. More specifically, taking the data of two real cases of crowdsourced law refore, here **we analyze**: 
+impacts processes of policy making. Based on the data of two real cases of crowdsourced law refore, here **we analyze**: 
 
 1. Participation patterns; 
 
