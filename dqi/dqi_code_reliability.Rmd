@@ -1,0 +1,213 @@
+---
+title: "DQI Project - Coding Matching"
+output: pdf_document
+---
+
+```{r, echo=FALSE}
+calculate_coding_matching = function(type, data_coder1, data_coder2, data_coder3, cat_table, TOT_CATEGORIES,
+                                     col_id, col_coder_name, MATCHING_THRESHOLD) {
+  res_cod_tot = c()
+  res_cod_f = c()
+  matching_less_threshold = 0
+  dis_cat_table = data.frame(cat_id=cat_table[,1],cat_name=cat_table[,2],dis_counter=rep(0,nrow(cat_table)))
+  matching_less_threshold_per_idea = 0
+  comments_counter = 0
+  for (i in 1:nrow(data_coder1)) {
+    coder = as.character(data_coder1[i,col_coder_name])
+    row = c(coder,as.character(as.vector(data_coder1[i,col_id:ncol(data_coder1)])))
+    res_cod_tot = rbind(res_cod_tot,row)
+    coder = as.vector(data_coder2[i,col_coder_name])
+    row = c(coder,as.character(as.vector(data_coder2[i,col_id:ncol(data_coder2)])))
+    res_cod_tot = rbind(res_cod_tot,row)
+    coder = as.vector(data_coder3[i,col_coder_name])
+    row = c(coder,as.character(as.vector(data_coder3[i,col_id:ncol(data_coder3)])))
+    res_cod_tot = rbind(res_cod_tot,row)
+    res_cod_row = c()
+    count_100 = 0
+    dis_cat = ''
+    dis_cat_counter = 0
+    comments_counter = comments_counter + 1
+    for (j in 3:ncol(data_coder1)) {
+      coder1_cod = as.character(data_coder1[i,j])
+      coder2_cod = as.character(data_coder2[i,j])
+      coder3_cod = as.character(data_coder3[i,j])
+      cat_id = as.numeric(cat_table[cat_table[,2]==colnames(data_coder1)[j],1])
+      if (is.na(coder1_cod)) {
+        coder1_cod = 'NA'
+      }
+      if (is.na(coder2_cod)) {
+        coder2_cod = 'NA'
+      }
+      if (is.na(coder3_cod)) {
+        coder3_cod = 'NA'
+      }
+      if (coder1_cod == coder2_cod && coder1_cod == coder3_cod && coder2_cod == coder3_cod) {
+        res_cod = 100
+        count_100 = count_100 + 1
+      } else {
+        if (coder1_cod != coder2_cod && coder1_cod != coder3_cod && coder2_cod != coder3_cod) {
+          res_cod = 0
+        } else {
+          res_cod = 50
+        }
+        dis_cat = paste(dis_cat, cat_id, " ", sep="")  
+        dis_cat_counter = dis_cat_counter + 1
+        dis_cat_table[dis_cat_table$cat_id==cat_id,"dis_counter"] = 
+          dis_cat_table[dis_cat_table$cat_id==cat_id,"dis_counter"] + 1
+      }
+      res_cod_row = cbind(res_cod_row, res_cod)
+    }
+    matching = round(((count_100/TOT_CATEGORIES)*100),0)
+    res_cod_row = cbind(matching,res_cod_row)
+    res_cod_row = cbind('Matching',res_cod_row)
+    res_cod_tot = rbind(res_cod_tot,res_cod_row)
+    colnames(res_cod_row) = colnames(data_coder1)
+    if (matching < MATCHING_THRESHOLD) {
+      res_cod_f = rbind(res_cod_f, c(paste('**',data_coder1[i,col_id],'**',sep=''),
+                                     matching,dis_cat_counter,dis_cat))
+      matching_less_threshold = matching_less_threshold + 1
+      matching_less_threshold_per_idea = matching_less_threshold_per_idea + 1
+    } 
+    else {
+      res_cod_f = rbind(res_cod_f, c(data_coder1[i,col_id],matching,dis_cat_counter,dis_cat))  
+    }
+    if (type == 'comments') {
+      current_idea_id = as.numeric(strsplit(data_coder1[i,col_id],'_')[[1]][1])
+      if (i < nrow(data_coder1)) {
+        next_idea_id = as.numeric(strsplit(data_coder1[i+1,col_id],'_')[[1]][1])
+      }
+      else {
+        next_idea_id = -10000
+      }
+      if (current_idea_id != next_idea_id) {
+        comments_dis = round((matching_less_threshold_per_idea/comments_counter)*100,0)
+        msg = paste(matching_less_threshold_per_idea,' (', comments_dis ,'%)  comm. cod. match. < ', 
+                    MATCHING_THRESHOLD, '%', sep='')
+        res_cod_f = rbind(res_cod_f, c(msg,'','',''))
+        matching_less_threshold_per_idea = 0
+        comments_counter = 0
+      }
+    }
+  } 
+  colnames(res_cod_tot) = colnames(data_coder1)
+  
+  ret = list(full_table=res_cod_tot,summary_table=res_cod_f,dis_cat_table=dis_cat_table,
+             tot_less_threshold=matching_less_threshold)
+  
+  return(ret)
+}
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Load libraries
+library(dplyr)
+library(knitr)
+```
+
+```{r, echo=FALSE}
+# Set constant
+TOT_CATEGORIES = 36
+MATCHING_THRESHOLD = 80
+FIRST_CATEGORY_COLUMN = 9
+```
+
+```{r, echo=FALSE}
+# load column name
+col_names = read.table("./data/dqi_analysis_columns.txt", sep=" ")
+# load reports
+tanja = read.csv("./data/tanja_dqi_2.csv", header=T, sep=",", stringsAsFactor=F)
+tanja = tanja[,1:nrow(col_names)]
+aurin = read.csv("./data/aurin_dqi_3.csv", header=T, sep=",", stringsAsFactor=F)
+aurin = aurin[,1:nrow(col_names)]
+jukan = read.csv("./data/jukan_dqi_3.csv", header=T, sep=",", stringsAsFactor=F)
+jukan = jukan[,1:nrow(col_names)]
+# pre-process datasets
+colnames(tanja) = col_names[,2]
+colnames(aurin) = col_names[,2]
+colnames(jukan) = col_names[,2]
+coder_tanja = list(Coder=rep('tanja',nrow(tanja)))
+coder_aurin = list(Coder=rep('aurin',nrow(aurin)))
+coder_jukan = list(Coder=rep('jukan',nrow(jukan)))
+tanja = cbind(coder_tanja, tanja)
+aurin = cbind(coder_aurin, aurin)
+jukan = cbind(coder_jukan, jukan)
+```
+
+## Categories
+
+```{r, echo=FALSE}
+cat_table = c()
+c = 1
+for (idx in FIRST_CATEGORY_COLUMN:nrow(col_names)) {
+  cat_table = rbind(cat_table, c(c, as.character(col_names[idx,2])))
+  cat(paste('(', c, ') ' , col_names[idx,2], '\n', sep=""))
+  c = c + 1
+}
+colnames(cat_table) = c('Cat_Id','Cat_Name')
+```
+
+# Ideas Coding Matching
+
+```{r, echo=FALSE, results='markup'}
+# analysis idea coding reliability
+tanja_i = tanja %>% select(Coder, Idea_Id, (FIRST_CATEGORY_COLUMN+1):nrow(col_names)) %>% filter(!is.na(Idea_Id))
+aurin_i = aurin %>% select(Coder, Idea_Id, (FIRST_CATEGORY_COLUMN+1):nrow(col_names)) %>% filter(!is.na(Idea_Id))
+jukan_i = jukan %>% select(Coder, Idea_Id, (FIRST_CATEGORY_COLUMN+1):nrow(col_names)) %>% filter(!is.na(Idea_Id)) 
+tot_ideas = nrow(tanja_i)
+ret = calculate_coding_matching('ideas', tanja_i,aurin_i,jukan_i,cat_table,TOT_CATEGORIES,
+                                2,1,MATCHING_THRESHOLD)
+table = data.frame(idea_id=ret$summary_table[,1],matching_per=ret$summary_table[,2],
+                   num_dis_cat=ret$summary_table[,3], dis_cat=ret$summary_table[,4])
+colnames(table) = c('Idea Id','Matching %','# Conflict Cats.', '(Id) Conflict Cats.')
+kable(table, format = "pandoc", align=c('c','c','c'), row.names=F)
+```
+
+*Obs.* In **bold** ideas with less than `r MATCHING_THRESHOLD`% of coding matching
+
+**Out of the `r tot_ideas` ideas, `r ret$tot_less_threshold` (`r round((ret$tot_less_threshold/tot_ideas)*100,0)`%) have coding matching below `r MATCHING_THRESHOLD`%.**
+
+### Least Matching Categories
+
+```{r echo=FALSE}
+dis_cat_table = ret$dis_cat_table %>% filter(dis_counter>0) %>% 
+                  arrange(desc(dis_counter)) %>% select(cat_name:dis_counter)
+colnames(dis_cat_table) = c('Cat. Name', paste('# Ideas in conflict (Out of ', tot_ideas, ')', sep=''))
+kable(dis_cat_table, format = "pandoc", align=c('c','c'), row.names=F)
+```
+
+
+# Comments Coding Matching
+
+```{r, echo=FALSE, results='markup'}
+for (idx in 1: nrow(tanja)) {
+  if (!is.na(tanja[idx,"Idea_Id"])) {
+    idea_id = tanja[idx,"Idea_Id"]
+  }
+  tanja[idx,"Comment_Num"] = paste(idea_id, '_', tanja[idx,"Comment_Num"], sep='')
+  aurin[idx,"Comment_Num"] = paste(idea_id, '_', aurin[idx,"Comment_Num"], sep='')
+  jukan[idx,"Comment_Num"] = paste(idea_id, '_', jukan[idx,"Comment_Num"], sep='')
+}
+tanja_c = tanja %>% filter(is.na(Idea_Id)) %>% select(-(Idea_Id:Comment)) %>% rename(Comment_Id=Comment_Num)
+aurin_c = aurin %>% filter(is.na(Idea_Id)) %>% select(-(Idea_Id:Comment)) %>% rename(Comment_Id=Comment_Num) 
+jukan_c = jukan %>% filter(is.na(Idea_Id)) %>% select(-(Idea_Id:Comment)) %>% rename(Comment_Id=Comment_Num)
+tot_comments = nrow(tanja_c)
+ret = calculate_coding_matching('comments', tanja_c,aurin_c,jukan_c,cat_table,TOT_CATEGORIES,
+                                2,1,MATCHING_THRESHOLD)
+table = data.frame(idea_id=ret$summary_table[,1],matching_per=ret$summary_table[,2],
+                   num_dis_cat=ret$summary_table[,3], dis_cat=ret$summary_table[,4])
+colnames(table) = c('Comment Id (Idea_Id+#Comment)','Matching %','# Conflict Cats.', '(Id) Conflict Cats.')
+kable(table, format = "pandoc", align=c('c','c','c'), row.names=F)
+```
+
+*Obs.* In **bold** comments with less than `r MATCHING_THRESHOLD`% of coding matching
+
+**Out of the `r tot_comments` comments, `r ret$tot_less_threshold` (`r round((ret$tot_less_threshold/tot_comments)*100,0)`%) have coding matching below `r MATCHING_THRESHOLD`%.**
+
+### Least Matching Categories
+
+```{r echo=FALSE}
+dis_cat_table = ret$dis_cat_table %>% filter(dis_counter>0) %>% 
+                  arrange(desc(dis_counter)) %>% select(cat_name:dis_counter)
+colnames(dis_cat_table) = c('Cat. Name', paste('# Comments in conflict (Out of ', tot_comments, ')', sep=''))
+kable(dis_cat_table, format = "pandoc", align=c('c','c'), row.names=F)
+```

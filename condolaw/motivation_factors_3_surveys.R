@@ -23,6 +23,7 @@ colnames(mot_survey_3) = c('email', 'datetime', 'o1s3', 'o2s3', 'o3s3', 'o4s3', 
 mot_survey_1 = mot_survey_1 %>% filter(email!='') %>% filter(!is.na(o1s1)) %>% filter(o1s1!='') %>% select(-datetime)
 mot_survey_2 = mot_survey_2 %>% filter(email!='') %>% filter(!is.na(o1s2)) %>% filter(o1s2!='') %>% select(-datetime)
 mot_survey_3 = mot_survey_3 %>% filter(email!='') %>% filter(!is.na(o1s3)) %>% filter(o1s3!='') %>% select(-datetime)
+
 mot_surveys = merge(mot_survey_1, mot_survey_2, by.x='email', by.y='email', all=F)
 mot_surveys = merge(mot_surveys, mot_survey_3, by.x='email', by.y='email', all=F)
 #mot_survey_1 = mot_survey_1 %>% filter(email %in% mot_surveys$email) %>% select(-o6s1)

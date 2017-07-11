@@ -13,12 +13,12 @@ library(ggplot2)
 library(nortest)
 library(xtable)
 library(knitr)
-source('demographic_offtrafficlaw.R')
+source('finland-experiment-study/offroad/demographic_offtrafficlaw.R')
 ```
 
 ```{r, echo=FALSE}
 # Load datasets
-raw_survey = read.csv("./data/surveyofftrafficlaw.csv", sep=",", header=T, stringsAsFactors=F)
+raw_survey = read.csv("finland-experiment-study/data/surveyofftrafficlaw.csv", sep=",", header=T, stringsAsFactors=F)
 raw_survey = raw_survey[-1,]
 raw_survey = raw_survey %>% filter(V10 == 1)  # Discard those that dind't complete the survey
 survey = raw_survey %>% select(V5, Q23:Q34_11) %>% select(-Q28) %>% select(-Q33_TEXT)
@@ -30,7 +30,7 @@ colnames(survey) = c('email','gender','age','basic_edu','occupational_edu','situ
                      'participated in municipality council', 'participated in committee meetings', 
                      'signed a petition', 'initiated a petition', 
                      'participated in peaceful demonstrations', 'volunteered in a NGO')
-participant_data = read.xlsx("./data/member_data.xls", sheetIndex=1, colIndex=c(2,7,8,9))
+participant_data = read.xlsx("finland-experiment-study/data/member_data.xls", sheetIndex=1, colIndex=c(2,7,8,9))
 ```
 
 ```{r, echo=FALSE}
